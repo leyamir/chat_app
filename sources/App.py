@@ -26,6 +26,7 @@ class Peer(Server, Client, Thread):
         self.lock = lock
         self.online_user = []
         self.kind = "message"
+        self.ready_send_find = False
         try:
             os.mkdir(host_name)
         except:
@@ -122,6 +123,8 @@ class Peer(Server, Client, Thread):
                     if message == "SENDING":
                         self.kind = "txt"
                         item[1].send("RECEIVED SIGNAL")
+                    elif message == "RECEIVED SIGNAL":
+                        self.ready_send_find = True
                     else:
                         content = "[ " + str(item[0][0]) + " ]  " + \
                             str(message) + "\n\n"
@@ -141,6 +144,8 @@ class Peer(Server, Client, Thread):
                         if message == "SENDING":
                             self.kind = "txt"
                             item[1].send("RECEIVED SIGNAL")
+                        elif message == "RECEIVED SIGNAL":
+                            self.ready_send_find = True
                         else:
                             content = "[ " + str(item[0][0]) + \
                                 " ]    " + str(message) + "\n\n"
@@ -195,12 +200,19 @@ class Peer(Server, Client, Thread):
         for item in self.in_bound:
             if item[0][0] == peer_name:
                 item[1].send(signal.encode("utf-8"))
-                
+
         for item in self.out_bound:
             if item[0][0] == peer_name:
                 item[1].send(signal.encode("utf-8"))
 
+        if self.ready_send_find:
+            for item in self.in_bound:
+                if item[0][0] == peer_name:
+                    item[1].send(content_of_file.encode("utf-8"))
 
+            for item in self.out_bound:
+                if item[0][0] == peer_name:
+                    item[1].send(content_of_file.encode("utf-8"))
 
         return "not found"
 
