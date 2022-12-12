@@ -1,0 +1,9 @@
+str = "[txt] yt.txt: Hello, Thien"
+print(str)
+
+def content_file(str):
+    for i in range(len(str)):
+        if str[i] == ":":
+            str = str[i+2:]
+            return str
+

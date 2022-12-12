@@ -1,11 +1,21 @@
 import customtkinter
-from tkinter import Tk     
+import tkinter
+from tkinter import Tk
 from tkinter.filedialog import askopenfilename
+from tkinter import messagebox
+
+
+def file_name_txt(str):
+    for i in range(-1, 0 - len(str) - 1, -1):
+        if (str[i] == "/"):
+            return str[i + 1:]
+
+
 
 class MainUi(customtkinter.CTk):
     def __init__(self, background_job, title_name):
         super().__init__()
-        self.geometry("450x800")
+        self.geometry("450x400")
         self.title(title_name)
         self.background_job = background_job
         self.peer_list = ["No online user"]
@@ -18,7 +28,7 @@ class MainUi(customtkinter.CTk):
         self.current_peer_name = customtkinter.StringVar()
 
         self.income_message = customtkinter.CTkTextbox(
-            master=self, state="disabled" , height=680, width=410, font=customtkinter.CTkFont(size=16))
+            master=self, state="disabled", height=280, width=110, font=customtkinter.CTkFont(size=16))
 
         self.income_message.grid(
             row=1, column=0, columnspan=3, padx=20, pady=(0, 0), sticky="nsew")
@@ -64,7 +74,7 @@ class MainUi(customtkinter.CTk):
             self.peer_list = ["No online user"]
         self.peer_chooser.configure(values=self.peer_list)
         return
-    
+
     def send_handler(self, event):
         name_to_sent = self.peer_chooser.get()
         content = self.input_message.get()
@@ -77,5 +87,29 @@ class MainUi(customtkinter.CTk):
         return
 
     def send_file_handler(self):
-        print("send file")
-        pass
+        name_to_sent = self.peer_chooser.get()
+        connected = self.background_job.connect_if_not(name_to_sent)
+
+        root = tkinter.Tk()
+        root.withdraw()
+        filename = askopenfilename()
+        print(filename)
+
+        if (filename[-4:] == ".txt"):
+            file = open(filename, "r")
+            content = "[txt] " + file_name_txt(filename) + ": " + file.read()
+            print(content[:5])
+            file.close()
+
+            if connected:
+                self.background_job.send_file_to_peer(name_to_sent, content)
+                self.input_message.delete("0", "end")
+                sent_report = "[ -> " + name_to_sent + \
+                    " ]    Sending file\n\n"
+                self.background_job.message_history.append(sent_report)
+
+        else:
+            messagebox.showerror(
+                'Python Error', 'Error: Please choose file .txt')
+
+        return
