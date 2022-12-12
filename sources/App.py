@@ -25,6 +25,7 @@ class Peer(Server, Client, Thread):
         self.message_history = []
         self.lock = lock
         self.online_user = []
+        self.kind = "message"
         try:
             os.mkdir(host_name)
         except:
@@ -118,11 +119,15 @@ class Peer(Server, Client, Thread):
             try:
                 message = item[1].recv(1024).decode("utf-8")
                 if message:
-                    content = "[ " + str(item[0][0]) + " ]  " + \
-                        str(message) + "\n\n"
-                    lock.acquire()
-                    self.message_history.append(content)
-                    lock.release()
+                    if message == "SENDING":
+                        self.kind = "txt"
+                        item[1].send("RECEIVED SIGNAL")
+                    else:
+                        content = "[ " + str(item[0][0]) + " ]  " + \
+                            str(message) + "\n\n"
+                        lock.acquire()
+                        self.message_history.append(content)
+                        lock.release()
                 else:
                     self.in_bound.remove(item)
             except Exception as error:
@@ -133,11 +138,15 @@ class Peer(Server, Client, Thread):
                 try:
                     message = item[1].recv(1024).decode("utf-8")
                     if message:
-                        content = "[ " + str(item[0][0]) + \
-                            " ]    " + str(message) + "\n\n"
-                        lock.acquire()
-                        self.message_history.append(content)
-                        lock.release()
+                        if message == "SENDING":
+                            self.kind = "txt"
+                            item[1].send("RECEIVED SIGNAL")
+                        else:
+                            content = "[ " + str(item[0][0]) + \
+                                " ]    " + str(message) + "\n\n"
+                            lock.acquire()
+                            self.message_history.append(content)
+                            lock.release()
                     else:
                         self.out_bound.remove(item)
                 except Exception as error:
@@ -181,26 +190,51 @@ class Peer(Server, Client, Thread):
     def send_file_to_peer(self, peer_name, content):
         content_of_file = content_file(content)
         print(content_file)
-        content = "Received file"
+        signal = "SENDING"
 
         for item in self.in_bound:
             if item[0][0] == peer_name:
-                item[1].send(content.encode("utf-8"))
-                file = open(
-                    "D:/Sourses/network/network_nam02/chat_app/sources/Bob", "w")
-                file.write(content_of_file)
-                file.close()
-                return
+                item[1].send(signal.encode("utf-8"))
+                
         for item in self.out_bound:
             if item[0][0] == peer_name:
-                item[1].send(content.encode("utf-8"))
-                file = open(
-                    "D:/Sourses/network/network_nam02/chat_app/sources/Bob", "w")
-                file.write(content_of_file)
-                file.close()
-                return
+                item[1].send(signal.encode("utf-8"))
+
+
 
         return "not found"
+
+    def get_file_from_peer(self, lock):
+        for item in self.in_bound:
+            item[1].settimeout(1)
+            try:
+                message = item[1].recv(1024).decode("utf-8")
+                if message:
+                    content = "[ " + str(item[0][0]) + " ]  " + \
+                        str(message) + "\n\n"
+                    lock.acquire()
+                    self.message_history.append(content)
+                    lock.release()
+                else:
+                    self.in_bound.remove(item)
+            except Exception as error:
+                pass
+        for item in self.out_bound:
+            if item[0][0] != "SERVER":
+                item[1].settimeout(1)
+                try:
+                    message = item[1].recv(1024).decode("utf-8")
+                    if message:
+                        content = "[ " + str(item[0][0]) + \
+                            " ]    " + str(message) + "\n\n"
+                        lock.acquire()
+                        self.message_history.append(content)
+                        lock.release()
+                    else:
+                        self.out_bound.remove(item)
+                except Exception as error:
+                    pass
+        return
 
     def debug(self):
         print("in_bound: " + str(self.in_bound))
@@ -209,6 +243,10 @@ class Peer(Server, Client, Thread):
     def run(self):
         while not self.terminate:
             self.get_connection()
-            self.get_message_from_peer(lock=self.lock)
+            if (self.kind == "message"):
+                self.get_message_from_peer(lock=self.lock)
+            elif (self.kind == "txt"):
+                self.get_file_from_peer(lock=self.lock)
+                self.kind = "message"
         print("exit")
         return
