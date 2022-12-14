@@ -86,13 +86,20 @@ class MainUi(customtkinter.CTk):
     def send_file_handler(self):
         name_to_sent = self.peer_chooser.get()
         connected = self.background_job.connect_if_not(name_to_sent)
-        if connected:
-            self.background_job.send_to_peer(name_to_sent, "<START>", type="text")
-            file_path = askopenfilename()
-            if file_path:
-                file = open(file_path, "rb")
-                data = file.read()
-                self.background_job.send_to_peer(name_to_sent, data, type="file")
-            self.background_job.send_to_peer(name_to_sent, "<END>", type="text")
-        else:
-            return
+        file_path = askopenfilename()
+        if file_path:
+            if connected:
+                self.background_job.send_to_peer(name_to_sent, "<START>", type="text")
+                if file_path:
+                    file = open(file_path, "rb")
+                    data = file.read()
+                    self.background_job.send_to_peer(name_to_sent, data, type="file")
+                self.background_job.send_to_peer(name_to_sent, "<END>", type="text")
+            else:
+                return
+            self.background_job.send_to_peer(name_to_sent, "FILE", type="text")
+            self.background_job.send_to_peer(name_to_sent, "FILE", type="text")
+            self.input_message.delete("0", "end")
+            sent_report = "[ -> " + name_to_sent + " ]    " + "FILE" + "\n\n"
+            self.background_job.message_history.append(sent_report)
+        return 

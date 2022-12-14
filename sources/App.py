@@ -1,6 +1,7 @@
 from Server import Server
 from Client import Client
 from threading import Thread
+import threading
 import socket
 import os
 
@@ -16,11 +17,8 @@ class Peer(Server, Client, Thread):
         Thread.__init__(self)
         self.terminate = False
         self.message_history = []
-        self.get_message_threads = []
         self.lock = lock
         self.online_user = []
-        self.get_file_from = None
-        self.get_file_signal = False
         try:
             os.mkdir(host_name)
         except:
@@ -53,7 +51,7 @@ class Peer(Server, Client, Thread):
             peer_ip = init_connection_sequence_recieve["host_ip"]
             peer_port = init_connection_sequence_recieve["host_port"]
             self.in_bound.append(((peer_name, peer_ip, peer_port), conn))
-            self.get_message_threads.append(Thread(target=self.get_message_from_peer, args=(self.lock, self.in_bound[-1])).start())
+            get_message_thread = Thread(target=self.get_message_from_peer, args=(self.lock, self.in_bound[-1])).start()
         except:
             return
 
@@ -77,7 +75,7 @@ class Peer(Server, Client, Thread):
             client_socket.send(init_connection_sequence_send.encode("utf-8"))
             self.out_bound.append(
                 ((peer_name, peer_ip, peer_port), client_socket))
-            self.get_message_threads.append(Thread(target=self.get_message_from_peer, args=(self.lock, self.out_bound[-1])).start())
+            get_message_thread = Thread(target=self.get_message_from_peer, args=(self.lock, self.out_bound[-1])).start()
         except:
             client_socket.close()
         return
@@ -125,11 +123,22 @@ class Peer(Server, Client, Thread):
             try:
                 message = peer[1].recv(1024).decode("utf-8")
                 if message:
-                    display_content = "[ " + str(peer[0][0]) + " ]  " + \
-                        str(message) + "\n\n"
-                    lock.acquire()
-                    self.message_history.append(display_content)
-                    lock.release()
+                    if message == "<START>":
+                        get_file_thread = Thread(target=self.get_file_from_peer(peer))
+                        get_file_thread.start()
+                    else:
+                        display_content = "[ " + str(peer[0][0]) + " ]  " + \
+                            str(message) + "\n\n"
+                        lock.acquire()
+                        self.message_history.append(display_content)
+                        lock.release()
+                else:
+                    try:
+                        self.in_bound.remove(peer)
+                        self.out_bound.remove(peer)
+                    except Exception as error:
+                        pass
+                    
             except Exception as error:
                 pass
         return
@@ -168,23 +177,24 @@ class Peer(Server, Client, Thread):
                 return True
         return False
 
-    def get_file_from_peer(self, lock):
-        self.get_file_from[1].settimeout(10)
-        print(self.get_file_from)
+    def get_file_from_peer(self, peer):
         file_byte = b""
         done = False
+        peer[1].settimeout(None)
         while not done:
             try:
-                data = self.get_file_from[1].recv(1024)
-                if file_byte[-5:] != "<END>":
-                    file_byte += data       
-                else:
-                    self.get_file_signal = False
+                data = peer[1].recv(1024)
+                if file_byte[-5:] == b"<END>":
                     done = True
-                    print(file_byte)
+                else:
+                    file_byte += data       
             except Exception as e:
                 print(e)
                 continue
+        file_byte = file_byte[:-5]
+        file = open(os.path.join(self.host_name, peer[0][0]), "wb") 
+        file.write(file_byte)
+        return
 
     def debug(self):
         print("in_bound: " + str(self.in_bound))
