@@ -1,6 +1,8 @@
 import customtkinter
-from tkinter import Tk     
+from tkinter import Tk
 from tkinter.filedialog import askopenfilename
+import os
+
 
 class MainUi(customtkinter.CTk):
     def __init__(self, background_job, title_name):
@@ -15,10 +17,11 @@ class MainUi(customtkinter.CTk):
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure((0, 1, 2), weight=1)
         self.bind('<Return>', self.send_handler)
+        self.bind('<Control-l>', self.clear_screen)
         self.current_peer_name = customtkinter.StringVar()
 
         self.income_message = customtkinter.CTkTextbox(
-            master=self, state="disabled" , height=680, width=410, font=customtkinter.CTkFont(size=16))
+            master=self, state="disabled", height=680, width=410, font=customtkinter.CTkFont(size=16))
 
         self.income_message.grid(
             row=1, column=0, columnspan=3, padx=20, pady=(0, 0), sticky="nsew")
@@ -55,6 +58,9 @@ class MainUi(customtkinter.CTk):
         self.income_message.configure(state="disabled")
         self.after(500, self.show_mesage)
 
+    def clear_screen(self, event):
+        self.background_job.message_history = []
+
     def reload_handler(self):
         self.background_job.server_interact("online?")
         self.peer_list = []
@@ -64,18 +70,29 @@ class MainUi(customtkinter.CTk):
             self.peer_list = ["No online user"]
         self.peer_chooser.configure(values=self.peer_list)
         return
-    
+
     def send_handler(self, event):
         name_to_sent = self.peer_chooser.get()
         content = self.input_message.get()
         connected = self.background_job.connect_if_not(name_to_sent)
         if connected:
-            self.background_job.send_to_peer(name_to_sent, content)
+            self.background_job.send_to_peer(name_to_sent, content, type="text")
             self.input_message.delete("0", "end")
             sent_report = "[ -> " + name_to_sent + " ]    " + content + "\n\n"
             self.background_job.message_history.append(sent_report)
         return
 
+
     def send_file_handler(self):
-        print("send file")
-        pass
+        name_to_sent = self.peer_chooser.get()
+        connected = self.background_job.connect_if_not(name_to_sent)
+        if connected:
+            self.background_job.send_to_peer(name_to_sent, "<START>", type="text")
+            file_path = askopenfilename()
+            if file_path:
+                file = open(file_path, "rb")
+                data = file.read()
+                self.background_job.send_to_peer(name_to_sent, data, type="file")
+            self.background_job.send_to_peer(name_to_sent, "<END>", type="text")
+        else:
+            return

@@ -26,7 +26,6 @@ class Server(threading.Thread):
                 peer_ip = init_connection_sequence_recieve["host_ip"]
                 peer_port = init_connection_sequence_recieve["host_port"]
                 self.in_bound.append(((peer_name, peer_ip, peer_port), conn))
-                #print("get from client " + str(self.in_bound))
             except socket.error as error:
                 print(error)
                 continue

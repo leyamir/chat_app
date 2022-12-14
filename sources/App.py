@@ -16,26 +16,30 @@ class Peer(Server, Client, Thread):
         Thread.__init__(self)
         self.terminate = False
         self.message_history = []
+        self.get_message_threads = []
         self.lock = lock
         self.online_user = []
+        self.get_file_from = None
+        self.get_file_signal = False
         try:
             os.mkdir(host_name)
         except:
             pass
-    
+
     def debug(self, flag):
         if flag == 1:
-            #print("here")
+            # print("here")
             for item in self.in_bound:
                 print(item)
         if flag == 2:
             for item in self.out_bound:
                 print(item)
+
     def get_connection(self):
-        self.server_socket.settimeout(1)
+        self.server_socket.settimeout(2)
         try:
             conn, addr = self.server_socket.accept()
-            init_connection_sequence_send =  "{" + \
+            init_connection_sequence_send = "{" + \
                 f"\'host_name\': \'{self.host_name}\', " +  \
                 f"\'host_ip\': \'{self.host_ip}\', " +  \
                 f"\'host_port\': {self.host_port}" + \
@@ -43,33 +47,37 @@ class Peer(Server, Client, Thread):
             conn.send(init_connection_sequence_send.encode("utf-8"))
             init_connection_sequence_recieve = str(
                 conn.recv(1024).decode("utf-8"))
-            init_connection_sequence_recieve = eval(init_connection_sequence_recieve)
+            init_connection_sequence_recieve = eval(
+                init_connection_sequence_recieve)
             peer_name = init_connection_sequence_recieve["host_name"]
             peer_ip = init_connection_sequence_recieve["host_ip"]
             peer_port = init_connection_sequence_recieve["host_port"]
             self.in_bound.append(((peer_name, peer_ip, peer_port), conn))
+            self.get_message_threads.append(Thread(target=self.get_message_from_peer, args=(self.lock, self.in_bound[-1])).start())
         except:
             return
 
     def connect_to(self, ip_port):
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        #self.client_socket.settimeout(4)
         try:
             client_socket.connect(ip_port)
             init_connection_sequence_recieve = str(
                 client_socket.recv(1024).decode("utf-8"))
-            init_connection_sequence_recieve = eval(init_connection_sequence_recieve)
+            init_connection_sequence_recieve = eval(
+                init_connection_sequence_recieve)
             peer_name = init_connection_sequence_recieve["host_name"]
             peer_ip = init_connection_sequence_recieve["host_ip"]
             peer_port = init_connection_sequence_recieve["host_port"]
-            init_connection_sequence_send =  "{" + \
+            init_connection_sequence_send = "{" + \
                 f"\'host_name\': \'{self.host_name}\', " +  \
                 f"\'host_ip\': \'{self.host_ip}\', " +  \
                 f"\'host_port\': {self.host_port}" + \
                 "}"
             client_socket.send(init_connection_sequence_send.encode("utf-8"))
-            self.out_bound.append(((peer_name, peer_ip, peer_port), client_socket))
+            self.out_bound.append(
+                ((peer_name, peer_ip, peer_port), client_socket))
+            self.get_message_threads.append(Thread(target=self.get_message_from_peer, args=(self.lock, self.out_bound[-1])).start())
         except:
             client_socket.close()
         return
@@ -79,7 +87,7 @@ class Peer(Server, Client, Thread):
         client_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             client_socket.connect(ip_port)
-            init_connection_sequence_send =  "{" + \
+            init_connection_sequence_send = "{" + \
                 f"\'host_name\': \'{self.host_name}\', " +  \
                 f"\'host_ip\': \'{self.host_ip}\', " +  \
                 f"\'host_port\': {self.host_port}" + \
@@ -90,59 +98,56 @@ class Peer(Server, Client, Thread):
             client_socket.close()
         return
 
-    def send_to_peer(self, peer_name, content):
-        for item in self.in_bound:
-            if item[0][0] == peer_name:
-                item[1].send(content.encode("utf-8"))
-                return
-        for item in self.out_bound:
-            if item[0][0] == peer_name:
-                item[1].send(content.encode("utf-8"))
-                return
-        return "not found"
-    
-    def get_message_from_peer(self, lock):
-        for item in self.in_bound:
-            item[1].settimeout(1)
+    def send_to_peer(self, peer_name, content, type):
+        if type == "text":
+            for item in self.in_bound:
+                if item[0][0] == peer_name:
+                    item[1].send(content.encode("utf-8"))
+                    return
+            for item in self.out_bound:
+                if item[0][0] == peer_name:
+                    item[1].send(content.encode("utf-8"))
+                    return
+        elif type == "file":
+            for item in self.in_bound:
+                if item[0][0] == peer_name:
+                    item[1].sendall(content)
+                    return
+            for item in self.out_bound:
+                if item[0][0] == peer_name:
+                    item[1].sendall(content)
+                    return
+        return
+
+    def get_message_from_peer(self, lock, peer):
+        while not self.terminate:
+            peer[1].settimeout(3)
             try:
-                message = item[1].recv(1024).decode("utf-8")
+                message = peer[1].recv(1024).decode("utf-8")
                 if message:
-                    content = "[ " + str(item[0][0]) + " ]  " + str(message) + "\n\n"
+                    display_content = "[ " + str(peer[0][0]) + " ]  " + \
+                        str(message) + "\n\n"
                     lock.acquire()
-                    self.message_history.append(content)
+                    self.message_history.append(display_content)
                     lock.release()
-                else:
-                    self.in_bound.remove(item)
             except Exception as error:
                 pass
-        for item in self.out_bound:
-            if item[0][0] != "SERVER":
-                item[1].settimeout(1)
-                try:
-                    message = item[1].recv(1024).decode("utf-8")
-                    if message:
-                        content = "[ " + str(item[0][0]) + " ]    " + str(message) + "\n\n"
-                        lock.acquire()
-                        self.message_history.append(content)
-                        lock.release()
-                    else:
-                        self.out_bound.remove(item)
-                except Exception as error:
-                    pass
         return
-    
+
     def server_interact(self, command):
         if not self.terminate:
-            if command == "online?": 
+            if command == "online?":
                 self.out_bound[0][1].send("o".encode("utf-8"))
                 try:
-                    recieve = str(self.out_bound[0][1].recv(2048).decode("utf-8"))
+                    recieve = str(self.out_bound[0][1].recv(
+                        2048).decode("utf-8"))
                     self.online_user = eval(recieve)
                 except:
                     return
         if command == "exit":
             self.out_bound[0][1].send("e".encode("utf-8"))
             return
+
     def connect_if_not(self, peer_name):
         for item in self.in_bound:
             if peer_name == item[0][0]:
@@ -163,6 +168,24 @@ class Peer(Server, Client, Thread):
                 return True
         return False
 
+    def get_file_from_peer(self, lock):
+        self.get_file_from[1].settimeout(10)
+        print(self.get_file_from)
+        file_byte = b""
+        done = False
+        while not done:
+            try:
+                data = self.get_file_from[1].recv(1024)
+                if file_byte[-5:] != "<END>":
+                    file_byte += data       
+                else:
+                    self.get_file_signal = False
+                    done = True
+                    print(file_byte)
+            except Exception as e:
+                print(e)
+                continue
+
     def debug(self):
         print("in_bound: " + str(self.in_bound))
         print("out_bound: " + str(self.out_bound))
@@ -170,8 +193,5 @@ class Peer(Server, Client, Thread):
     def run(self):
         while not self.terminate:
             self.get_connection()
-            self.get_message_from_peer(lock=self.lock)
         print("exit")
         return
-
-
