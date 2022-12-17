@@ -2,12 +2,13 @@ import customtkinter
 from tkinter import Tk
 from tkinter.filedialog import askopenfilename
 import os
+import time
 
 
 class MainUi(customtkinter.CTk):
     def __init__(self, background_job, title_name):
         super().__init__()
-        self.geometry("450x800")
+        self.geometry("450x400")
         self.title(title_name)
         self.background_job = background_job
         self.peer_list = ["No online user"]
@@ -21,7 +22,7 @@ class MainUi(customtkinter.CTk):
         self.current_peer_name = customtkinter.StringVar()
 
         self.income_message = customtkinter.CTkTextbox(
-            master=self, state="disabled", height=680, width=410, font=customtkinter.CTkFont(size=16))
+            master=self, state="disabled", height=280, width=110, font=customtkinter.CTkFont(size=16))
 
         self.income_message.grid(
             row=1, column=0, columnspan=3, padx=20, pady=(0, 0), sticky="nsew")
@@ -76,30 +77,44 @@ class MainUi(customtkinter.CTk):
         content = self.input_message.get()
         connected = self.background_job.connect_if_not(name_to_sent)
         if connected:
-            self.background_job.send_to_peer(name_to_sent, content, type="text")
+            self.background_job.send_to_peer(
+                name_to_sent, content, type="text")
             self.input_message.delete("0", "end")
             sent_report = "[ -> " + name_to_sent + " ]    " + content + "\n\n"
             self.background_job.message_history.append(sent_report)
         return
 
+    
+    def get_file_name(self, str):
+        for i in range(-1, 0 - len(str) - 1, -1):
+            if (str[i] == "/"):
+                return str[i + 1:]
 
     def send_file_handler(self):
         name_to_sent = self.peer_chooser.get()
         connected = self.background_job.connect_if_not(name_to_sent)
         file_path = askopenfilename()
+        print(self.get_file_name(file_path))
         if file_path:
             if connected:
-                self.background_job.send_to_peer(name_to_sent, "<START>", type="text")
+                self.background_job.send_to_peer(
+                    name_to_sent, "<START>", type="text")
                 if file_path:
+                    self.background_job.send_to_peer(
+                        name_to_sent, bytes(self.get_file_name(file_path), 'utf-8'), type="file")
+                    time.sleep(1)
                     file = open(file_path, "rb")
                     data = file.read()
-                    self.background_job.send_to_peer(name_to_sent, data, type="file")
-                self.background_job.send_to_peer(name_to_sent, "<END>", type="text")
+                    self.background_job.send_to_peer(
+                        name_to_sent, data, type="file")
+
+                self.background_job.send_to_peer(
+                    name_to_sent, "<END>", type="text")
             else:
                 return
-            self.background_job.send_to_peer(name_to_sent, "FILE", type="text")
-            self.background_job.send_to_peer(name_to_sent, "FILE", type="text")
+            # self.background_job.send_to_peer(name_to_sent, "FILE", type="text")
+            # self.background_job.send_to_peer(name_to_sent, "FILE", type="text")
             self.input_message.delete("0", "end")
             sent_report = "[ -> " + name_to_sent + " ]    " + "FILE" + "\n\n"
             self.background_job.message_history.append(sent_report)
-        return 
+        return
